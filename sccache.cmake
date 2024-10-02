@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.20)
 
 include(FetchContent)
 
+# TODO: Make variables locally scoped.
+
+# TODO: Choose a better name than SCCACHE_
 set(SCCACHE_ sccache)
 set(SCCACHE_VERSION "0.8.2")
 set(SCCACHE_HASHSUM "")
@@ -35,25 +38,36 @@ set(SCCACHE_DOWNLOAD_URL "${SCCACHE_DOWNLOAD_URL_BASE}/${SCCACHE_TAG_NAME}/sccac
 message(STATUS "Fetching sccache executable (${SCCACHE_TAG_NAME} ${SCCACHE_ARCH} ${SCCACHE_RAW_OS})...")
 
 # TODO: Use file(DOWNLOAD ...) here so we don't fatal error if FetchContent fails.
-# file(DOWNLOAD "${SCCACHE_DOWNLOAD_URL}" "${CMAKE_BINARY_DIR}/sscache.${SCCACHE_URL_FILE_EXTENSION}")
+file(DOWNLOAD
+    "${SCCACHE_DOWNLOAD_URL}" "${CMAKE_BINARY_DIR}/sccache/sscache.${SCCACHE_URL_FILE_EXTENSION}"
+    STATUS SCCACHE_DOWNLOAD_STATUS
+)
+
+list(GET SCCACHE_DOWNLOAD_STATUS 0 SCCACHE_STATUS_CODE)
+
+if(${SCCACHE_STATUS_CODE} EQUAL 0)
+    message(STATUS "Download sccache successfully!")
+else()
+    message(WARNING "Failed to fetch sccache... using regular builds")
+    file($())
+    return()
+endif()
+
 FetchContent_declare(${SCCACHE_}
     URL "${SCCACHE_DOWNLOAD_URL}"
     DOWNLOAD_EXTRACT_TIMESTAMP true
 )
 FetchContent_MakeAvailable(${SCCACHE_})
 
-# Check if the content was successfully fetched
-if(NOT EXISTS ${${SCCACHE_}_SOURCE_DIR})
-  message(WARNING "Failed to fetch sccache... using regular builds")
-  return()
-endif()
-
 cmake_path(APPEND SCCACHE_EXECUTABLE_PATH "${${SCCACHE_}_SOURCE_DIR}" "${SCCACHE_EXECUTABLE_NAME}")
+
+# TODO: Maybe get the absolute path, just in case...
 # cmake_path(ABSOLUTE_PATH SCCACHE_EXECUTABLE_PATH "${SCCACHE_EXECUTABLE_PATH}")
+
 message(STATUS "Setting sccache executable path: ${SCCACHE_EXECUTABLE_PATH}")
 
+# TODO: Maybe use already installed sccache, and fallback to remote if not available.
 # find_program(SCCACHE sccache REQUIRED)
-# SCCACHE_ERROR_LOG=/tmp/sccache_log.txt SCCACHE_LOG=debug sccache
 
 set(ENV{RUSTC_WRAPPER} "${SCCACHE_EXECUTABLE_PATH}")
 set(CMAKE_C_COMPILER_LAUNCHER ${SCCACHE_EXECUTABLE_PATH})
@@ -61,5 +75,10 @@ set(CMAKE_CXX_COMPILER_LAUNCHER ${SCCACHE_EXECUTABLE_PATH})
 set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT Embedded)
 cmake_policy(SET CMP0141 NEW)
 
+# TODO: Check if these environments variables are propagated at program build time,
+#       rather than only CMake build time.
 set(ENV{SCCACHE_CACHE_SIZE} "100G")
 set(ENV{SCCACHE_DIRECT} "true")
+
+# TODO: Generate and assign the sccache config file, and point to it using `SCCACHE_CONF` env var.
+#       see: https://github.com/mozilla/sccache/blob/main/docs/Configuration.md
